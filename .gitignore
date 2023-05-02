@@ -1,0 +1,14 @@
+*.atoms
+*.nc
+*.dump
+*.data
+*.submit
+submit.*
+jobscript*
+*jobscript
+data.*
+restart.*
+slurm*
+log.lammps
+*_data
+.nfs*

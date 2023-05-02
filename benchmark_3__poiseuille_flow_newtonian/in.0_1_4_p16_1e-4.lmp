@@ -1,0 +1,106 @@
+dimension          2
+units              lj
+atom_style         rheo
+boundary           p f p 
+comm_modify        vel yes
+newton off
+
+## Particle Lattice/Resolution Parameters
+variable           t_tot equal 3000
+variable           R equal 5
+variable           sf equal 0.25 #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           hd equal 3
+variable           h3 equal ${hd}*${del}
+variable           dz equal 0.1*${sf}
+
+# create simulation box
+
+# read_restart       restart_adj_param.857143
+###########################
+### COMMENT FOR RESTART ###
+region             box block 0 10 -6.5 6.5 -${dz} ${dz} units box
+create_box         2 box
+lattice            sq ${n}
+
+#region             block cylinder z 10 -4.8 4 -${dz} ${dz} units b
+region             topwall block INF INF  5.01 EDGE -${dz} ${dz} units box
+region             block   block INF INF -${R} ${R} -${dz} ${dz} units box
+region             botwall block INF INF EDGE -5.01 -${dz} ${dz} units box
+
+create_atoms       2 region topwall
+create_atoms       2 region botwall
+create_atoms       1 region block
+
+group              fluid type 1
+group              rig type 2
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+### COMMENT FOR RESTART ###
+###########################
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           cs equal 2
+variable           zeta equal 1 
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable           fext equal 1e-4/${n}
+#Viscosity parameters
+variable           eta equal 0.16
+variable           gd0 equal 1e-3
+variable           npow equal 0.5
+variable           K equal ${eta}*${gd0}^(1-${npow})
+
+
+
+# Set particle properties
+mass               1 ${mp}
+mass               2 ${mp}
+set                group all rho ${rho0}
+set                group all phase 0
+set                group rig phase 5
+set                group all temp 1.0
+
+
+#Integration and Kernel
+fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1
+fix                2 all rheo/viscosity constant ${eta} 
+
+fix                4 rig setforce 0.0 0.0 0.0
+fix                5 fluid addforce ${fext} 0.0 0.0
+
+variable           Dr equal 0.1*${h3}*${cs}
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
+pair_coeff         * * ${rho0} ${cs}
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3 #CFL criterion
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable           dt_max equal 0.1*${sf}/.01 
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max} 
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
+variable           Nsteps equal round(${t_tot}/${dt_max})
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+thermo             2500
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 2000 data/dump/0_1_4_p16_1e-4.atoms id type x y vx vy fx fy c_den c_phase c_eta f_rheo_grad_gradv[*]
+dump               2 all netcdf 2000 data/ncdf/0_1_4_p16_1e-4.nc id type x y vx vy fx fy c_den c_phase c_eta f_rheo_grad_gradv[1] f_rheo_grad_gradv[2] f_rheo_grad_gradv[3] f_rheo_grad_gradv[4]
+variable           skin equal 0.2*${h3}
+neighbor           ${skin} bin
+neigh_modify       one 5000
+run                ${Nsteps}
+# write_restart      0_1_4_p16_1e-4.restart

@@ -1,0 +1,142 @@
+####################################################
+## RHEO wall-debug branch, 3/28/2022              ##
+## Run poiseuille inlet                           ##
+####################################################
+
+dimension          2
+units              lj
+atom_style         rheo
+boundary           f p p 
+comm_modify        vel yes
+newton off
+
+############################################
+## Re Parameters ##
+############################################
+variable           D equal 8  #cylinder diameter
+variable           R equal ${D}/2 
+variable           sf equal 0.25 #/${L} #scaling of unit cell
+
+############################################
+## Particle Lattice/Resolution Parameters ##
+############################################
+
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           hd equal 3
+variable           h3 equal ${hd}*${del}
+variable           dz equal 0.1*${sf}
+
+############################################
+##              Create box                ##
+############################################
+
+read_data          initial_data/sf10_ordered.data
+
+# region             obstacle cylinder z 50.0 0 ${R} -${dz} ${dz} units box
+# group              rig region obstacle
+# group              fluid subtract all rig
+group               fluid type 1
+group               rig type 2
+#set                group rig type 2
+
+variable           strip_width equal $(lx/96) #strip_width = 1.5
+change_box         all x final $(xlo) $(xhi+v_strip_width) units box
+# Expand box to the right by a distance equal to the length inserted
+
+# Shift atoms by same increment
+displace_atoms     all move ${strip_width} 0 0
+
+############################################
+##         Potential parameters           ##
+############################################
+
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           cs equal 10
+variable           zeta equal 1 
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable           eta equal 2
+
+variable           Dr equal 0.25*${h3}*${cs}
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}
+pair_coeff         * * ${rho0} ${cs}
+
+############################################
+##         Particle Properties            ##
+############################################
+
+mass               1 ${mp}
+mass               2 ${mp}
+set                group all rho ${rho0}
+# set                group all phase 0
+# set                group rig phase 5
+set                group all temp 1.0
+
+velocity           all set 0 0 0
+
+############################################
+##         Integration and fixes          ##
+############################################
+
+#CFL criterion
+variable           dt_max equal  0.1*${h3}/${cs}/3 
+timestep           0.0025 #${dt_max} 
+# Redefine to a more "round" number 
+
+fix                1 all rheo ${h3} CRK1 25 shift
+fix                2 all rheo/viscosity constant ${eta} 
+fix                3 rig setforce 0.0 0.0 0.0
+#fix                4 fluid addforce ${fext} 0.0 0.0
+fix                5 all rheo/inlet ${h3} inlet_data/sf10_ordered.data ${strip_width} $(v_strip_width/60) # u_in=0.025
+# Args are file, width of insertion, velocity of inserted particles. 
+#
+# Some requirements:
+#  1) The width should be >= the kernel cutoff to avoid particles seeing a void
+#  2) Lx/width must be an integer - inserted strips evenly divide read datafile
+#  3) Lx*(dt*vx) must be an integer - strips are inserted on a discrete timestep
+#  4) The y and z dimensions of the input data file need to match the box dimensions
+#  5) xlo needs to be zero
+# These requirements are ~fudged due to float artithmetic and can easily error
+#
+# In the future, I plan to generalize and remove (2) by letting strips straddle 
+# the PBC, (3) by alternatively requiring the strip length exceeds the kernel
+# length by a buffer equal to the distance an inserted atom moves in a timestep,
+# and (4)
+#
+# Note, fluid atoms within a region of 2x the inserted width move at a fixed v
+# Solid atoms only have a buffer of 1x the inserted width (less worry with density
+# evolution).
+#
+# Fluid atoms on the edge of the system (inserted width) have rho interpolate
+# linearly from it's intial value value to 1.0 to reduce effects of seeing the void
+# Shifting is also turned off
+# Adhoc - can improve. Ideally we'd somehow extend valuse of atoms entering
+# the buffer to the rest of the atoms in a buffer, but need to bin horizontally...
+# Or create ghost atoms to mirror...
+
+
+variable           skin equal 0.2*${h3}
+neighbor           ${skin} bin
+neigh_modify       one 5000
+
+
+############################################
+##            Output and run              ##
+############################################
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+dump               1 all custom 250 data/dump/1_1_10_0p1_0p0025_2000.atoms id type x y vx vy fx fy c_den c_phase c_eta f_rheo_grad_gradv[*] 
+
+
+thermo             250
+thermo_style       custom step time ke press
+thermo_modify      norm no lost ignore
+
+run                500000
+

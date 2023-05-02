@@ -1,0 +1,119 @@
+dimension          2
+units              lj
+atom_style         rheo
+boundary           f s p 
+comm_modify        vel yes
+newton off
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           t_tot equal 300
+variable           sf equal var_sf #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           hd equal var_hd
+variable           h3 equal ${hd}*${del}
+variable           dz equal 0.1*${sf}
+
+# create simulation box
+
+# read_restart       restart_adj_param.857143
+###########################
+### COMMENT FOR RESTART ###
+
+region             box block 0 20 0 30 -${dz} ${dz} units box
+create_box         3 box
+lattice            sq ${n}
+
+region             left_wall block 0 1 1.01 30 -${dz} ${dz} units box
+region             right_wall block 19 20 1.01 30 -${dz} ${dz} units box
+region             bot_wall block 0 20 0 1 -${dz} ${dz} units box
+region             interior block 1.01 8.99 1.01 20 -${dz} ${dz} units box
+region             mid_wall block 9 10 1.01 30 -${dz} ${dz} units box
+create_atoms       1 region interior
+create_atoms       2 region left_wall
+create_atoms       2 region right_wall
+create_atoms       2 region bot_wall
+create_atoms       3 region mid_wall
+
+group              fluid type 1
+group              stat_wall type 2
+group              dyn_wall type 3
+group              wall union stat_wall dyn_wall
+
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+#displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           cs equal 1
+variable           zeta equal 1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable           Dr equal var_Dr*${h3}*${cs}
+variable           fext equal var_fext/${n}
+#Viscosity parameters
+variable           eta equal var_eta
+#(for a Herschel-Bulkley fluid - special case: power law)
+variable           gd0 equal 1e-2
+variable           npow equal 0.5
+variable           K equal ${eta}*${gd0}^(1-${npow})
+
+
+# Set particle properties
+mass               1 ${mp}
+mass               2 ${mp}
+mass               3 ${mp}
+
+set                group all rho ${rho0}
+set                group all phase 0
+set                group wall phase 4
+
+set                group all temp 1.0
+
+
+#Integration and Kernel
+fix                1 all rheo ${h3} var_kernel var_cutoff var_shift # rhosum 1  shift
+fix                2 all rheo/viscosity constant ${eta} 
+#fix                2 all rheo/viscosity power ${eta} ${gd0} ${K} ${npow} 
+var_surface
+
+fix                4 wall setforce 0.0 0.0 0.0
+fix                5 fluid addforce 0.0 ${fext} 0.0
+#fix                6 rig_dyn move linear 0.0 0.5 0.0 
+
+
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
+pair_coeff         * * ${rho0} ${cs}
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3 #CFL criterion
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable            dt_max equal 0.25*sqrt(${h3}/${fext}/${sf})
+#variable           dt_max equal 0.1*${sf}/.01 
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max} 
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
+variable           Nsteps equal round(${t_tot}/${dt_max})
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+thermo             200
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 500 var_dump_path.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               2 all netcdf 500 var_ncdf_path.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
+variable           skin equal 0.2*${h3}
+neighbor           ${skin} bin
+neigh_modify       one 5000
+run                ${Nsteps}
+write_restart      restart_static
+

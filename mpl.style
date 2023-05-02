@@ -1,0 +1,61 @@
+# This is Dan Allan's setting of Professor Robert Leheny's plotting style preferences.
+# Updated August 2014
+#
+# Invoke in Python matplotlib like so:
+#
+#     import matplotlib as mpl
+#
+#     mpl.style.use('https://gist.github.com/danielballan/be066529de85e87a5fe7/raw')
+#
+# This feature is only available in matplotlib version 1.4 or higher.
+
+# Plot area
+figure.figsize: 10, 8
+figure.facecolor: white
+figure.edgecolor: white
+axes.facecolor : white
+axes.grid: False
+grid.color: 1.0
+
+# Axes and ticks
+axes.linewidth: 2
+axes.edgecolor: black
+xtick.direction: in
+ytick.direction: in
+xtick.major.size:  6
+xtick.major.width: 2
+xtick.minor.size:  6
+xtick.minor.width: 2
+ytick.major.size:  6
+ytick.major.width: 2
+ytick.minor.size:  6
+ytick.minor.width: 2
+
+# Space xlabels lower than default.
+xtick.major.pad: 5
+xtick.minor.pad: 5
+
+# Font sizes for various elements.
+font.size: 24
+axes.titlesize: 28
+axes.labelsize: 28
+xtick.labelsize: 24
+ytick.labelsize: 24
+legend.fontsize: 24
+
+# Use sans-serif LaTeX for all text.
+text.usetex: false
+#mathtext.fontset: 'cm'
+mathtext.rm: 'serif'
+#text.latex.preamble: \usepackage{sfmath}
+
+image.cmap: gray
+
+# Plot elements
+lines.linewidth: 3
+lines.markersize: 12
+lines.markeredgewidth: 1.5
+patch.edgecolor: [0,0,0]
+# savefig options (avoid clipping at margins)
+savefig.bbox : tight
+savefig.pad_inches : 0.2

@@ -1,0 +1,120 @@
+dimension 2
+units              lj
+atom_style         rheo
+boundary           p p p 
+comm_modify        vel yes
+newton off
+
+##### Particle Generation #######
+##################################
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           sf equal 0.2 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+# n is particle number density, depends on lattive
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2) # number of particles per volume
+variable           del equal ${sf}#*sqrt(2) # distance between particles
+lattice            sq ${n} #create a set of potential particle locations
+
+# SPH Smoothing Kernel Length
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+
+
+# create simulation box
+variable           dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
+region             box block 0 ${L} 0 ${L} -${dz} ${dz} units box #create a 2D box using box units (vs lattice units)
+create_box         2 box #create a simulation box from the region box - with 2 types of atoms
+
+#Create atoms in our whole simulation box
+create_atoms       1 region box #creates atoms of type 1 within the box region
+
+# Assign all particles of type 1 to a group fluid
+
+group              fluid type 1
+#group             wall type 2
+
+##### End Particle Generation #######
+################################## 
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+
+##### Setting Physical Parameters #######
+################################## 
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0 #Equilibrium density P=cs^2(rho-rho0)
+variable           mp equal ${rho0}/${n} #particle mass, fixed by density and number density
+variable           cs equal 1.0 #speed of sound - for pressure EoS
+variable           eta equal 0.05 #dynamic viscosity
+variable           zeta equal 1 #artificial viscosity - stabilizing term
+variable           Dr equal 0.1*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
+#variable          D equal 1.0 
+#variable          kappa equal ${D}*${rho0}/${mp}
+#variable          fext equal 5e-3/${n}
+
+
+# Set particle properties
+mass               * ${mp}
+set                group all rho ${rho0}
+set                group all phase 0
+set                group all temp 1.0
+
+variable           u0 equal 0.05
+
+variable           uy atom  ${u0}*sin(2*PI*x/lx)*cos(2*PI*y/ly)
+variable           ux atom -${u0}*sin(2*PI*y/ly)*cos(2*PI*x/ly)
+variable           d0 atom ${rho0}-${u0}*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+
+velocity           all set v_ux v_uy 0.0 units box
+set                group all rho v_d0
+
+
+
+
+
+##### Define Physical Equations #######
+################################## 
+
+fix                1 all rheo ${h3} Quintic 0 shift # rhosum 1  shift
+#fix                2 all rheo/surface ${h3} 1.5 10               
+fix                3 all rheo/viscosity constant ${eta} 
+
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
+pair_coeff         * * ${rho0} ${cs}
+
+#Timestep
+#Ensures that the timestep is smaller than values, as per CFL criteria
+variable           dt_max equal  0.1*${h3}/${cs}/3#0
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max} 
+
+##### Defining Output Setting #######
+################################## 
+
+#Compute atom properties to output in dump file
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+#l log file output and output frequency
+thermo             100
+thermo_style       custom step time ke temp press
+thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
+
+#define a dump file
+dump               1 all custom 200 data/dump/1_5_5_3p5.atoms id type x y vx vy fx fy f_rheo_grad_gradv[*]
+dump               2 all netcdf 100 data/ncdf/1_5_5_3p5.nc id type x y vx vy fx fy c_den c_phase c_eta f_rheo_grad_gradv[1] f_rheo_grad_gradv[4]
+#dump_modify        1 append yes at -1 thermo yes
+
+#modify neighbor bin size based on the cutoff distance h3
+variable           skin equal 0.2*${h3}
+neighbor           ${skin} bin
+neigh_modify       one 10000 #increase number of allowed neighbors
+
+#run for n steps
+run 0
