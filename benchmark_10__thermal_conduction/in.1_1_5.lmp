@@ -9,7 +9,7 @@ comm_modify        vel yes
 #################################
 
 variable           t_tot equal 300
-variable           sf equal 0.05 #/${L} #scaling of unit cell
+variable           sf equal 0.2 #/${L} #scaling of unit cell
 variable           nb equal 1    #number of basis atoms depends on lattice
 variable           n equal ${nb}/(${sf}^2)
 variable           del equal ${sf}#*sqrt(2)
@@ -109,7 +109,7 @@ pair_coeff         * * rheo/freeze ${h3} ${cutb} 0.1 0.09 0.05 0.1  #0.05 0.5 0.
 ###  Integration and Kernel  ###
 #################################
 
-fix                1 all rheo ${h3} Quintic 0 thermal shift # rhosum 1
+fix                1 all rheo ${h3} CRK1 0 thermal shift # rhosum 1
 fix                2 all rheo/viscosity constant ${eta}
 fix                3 fluid rheo/thermal conductivity constant ${kappa} cv constant 1.0 Tfreeze constant 0 alpha constant 0.05 #0.01
 fix                4 all setforce 0.0 0.0 0.0
@@ -132,8 +132,8 @@ thermo             250
 thermo_style       custom step time etotal temp press
 
 thermo_modify      norm no
-dump               1 all custom 500 dump/1_5_20.atoms id type x y vx vy fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
-dump               2 all netcdf 500 ncdf/1_5_20.nc id type x y z vx vy vz fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
+dump               1 all custom 500 data/dump/1_1_5.atoms id type x y vx vy fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
+dump               2 all netcdf 500 data/ncdf/1_1_5.nc id type x y z vx vy vz fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
 variable           skin equal 0.2*${h3}
 neighbor           ${skin} bin
 neigh_modify       one 5000

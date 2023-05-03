@@ -1,0 +1,141 @@
+dimension          2
+units              lj
+atom_style         rheo
+boundary           s s p 
+comm_modify        vel yes
+
+#################################
+###      Scaling Variables    ###
+#################################
+
+variable           t_tot equal 300
+variable           sf equal 0.2 #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           cutb equal 0.8*${h3}
+variable           dz equal 0.1*${sf}
+
+
+#################################
+###  Create Simulation Box  ###
+#################################
+
+
+region             box block -1 11 0 10 -${dz} ${dz} units box
+create_box         2 box
+lattice            sq ${n}
+create_atoms       1 region box
+
+region             left_plate block EDGE 0 EDGE EDGE -${dz} ${dz} units box
+region             right_plate block 10 EDGE EDGE EDGE -${dz} ${dz} units box
+# region             fluid block 0 10 EDGE EDGE -${dz} ${dz} units box
+# group              fluid type 1
+
+group              left_plate region left_plate
+group              right_plate region right_plate
+group              boundary union left_plate right_plate
+group              fluid subtract all boundary
+
+set                group boundary type 2
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           cs equal 1
+variable           zeta equal 1 
+variable           D equal 0.1 #diffusivity
+variable	       kappa equal ${D}*${rho0}/${mp} #thermal diffusivity
+#Viscosity parameters
+variable           eta equal 1
+variable           Dr equal 0.1*${h3}*${cs}
+
+
+mass               1 ${mp}
+mass               2 ${mp}
+
+
+set                group all rho ${rho0}
+set                group all phase 0
+
+variable           T0 equal 1
+variable           T atom (${T0}*sin(PI*x/10))
+set                group fluid temp v_T
+set                group boundary temp 0.0
+
+#################################
+###   Setting interactions    ###
+#################################
+
+pair_style         hybrid/overlay rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr} rheo/freeze #thermal/expand
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h3} ${cutb} 0.1 0.09 0.05 0.1  #0.05 0.5 0.01
+                                #   cut    cutb   k   sig eps  gam
+
+
+
+# The arguments for rheo/freeze are:
+#    1) Maximum cutoff of interaction. Theoretically it should be
+#       (max bond length)*(max stetch) but making it the same cutoff
+#       as the rheo pairstyle means only one neighbor list will be built
+#    2) Maximum length a bond can reach - LAMMPS will only bond particles
+#       if they are within a distance of 1.8
+#    3) The stiffness k of a bond. I had calculated the bulk modulus in the past,
+#       but don't know it exactly for this system. It's probably approximately
+#       1.0*k. In comparison, the bulk modulus of the fluid is ${cs)^2*${rho0} = 1.
+#       So these bonds may be a little weak since the solid should be stiffer than
+#       the fluid. I don't know how large of an effect this will have on errors
+#       however, this still needs testing.
+#    4) The interaction distance of non-bonded particles, this should be about
+#       comparable to the average interparticle distance
+#    5) The maximum strain between two particles before a bond will break.
+#       Not relevant for this example.
+#    6) In addition to the spring forces, particles will damp out normal velocity
+#       differences while interacting (this is like DPD). This last parameter is
+#       the strength of this damping.
+
+
+#################################
+###  Integration and Kernel  ###
+#################################
+
+fix                1 all rheo ${h3} CRK0 0 thermal shift # rhosum 1
+fix                2 all rheo/viscosity constant ${eta}
+fix                3 fluid rheo/thermal conductivity constant ${kappa} cv constant 1.0 Tfreeze constant 0 alpha constant 0.05 #0.01
+fix                4 all setforce 0.0 0.0 0.0
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3 
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable           dt_max equal 0.1*${sf}/.01 
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max} 
+variable           Nsteps equal round(${t_tot}/${dt_max})
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+compute            temp all property/atom temp
+
+
+thermo             250
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 500 data/dump/1_0_5.atoms id type x y vx vy fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
+dump               2 all netcdf 500 data/ncdf/1_0_5.nc id type x y z vx vy vz fx fy c_den c_phase c_eta c_temp #f_rheo_chi_chi
+variable           skin equal 0.2*${h3}
+neighbor           ${skin} bin
+neigh_modify       one 5000
+run                ${Nsteps}
+#write_data conduction_sin_data.*
