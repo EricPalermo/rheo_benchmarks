@@ -25,3 +25,6 @@
 [submodule "benchmark_9__surface_normal/RHEO"]
 	path = benchmark_9__surface_normal/RHEO
 	url = https://github.com/lammps/lammps.git
+[submodule "lammps_files/lammps"]
+	path = lammps_files/lammps
+	url = https://github.com/lammps/lammps.git
