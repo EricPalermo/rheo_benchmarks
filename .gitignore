@@ -13,3 +13,6 @@ log.lammps
 *_data
 .nfs*
 build
+jobscript*
+submit.*
+log.lammps
