@@ -1,0 +1,27 @@
+[submodule "benchmark_10__thermal_conduction/RHEO"]
+	path = benchmark_10__thermal_conduction/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_1__taylor_green_vortex_flow/RHEO"]
+	path = benchmark_1__taylor_green_vortex_flow/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_2__velocity_divergence/RHEO"]
+	path = benchmark_2__velocity_divergence/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_3__poiseuille_flow_newtonian/RHEO"]
+	path = benchmark_3__poiseuille_flow_newtonian/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_4__poiseuille_flow_herschel_bulkley/RHEO"]
+	path = benchmark_4__poiseuille_flow_herschel_bulkley/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_6__flow_past_a_cylinder/RHEO"]
+	path = benchmark_6__flow_past_a_cylinder/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_7__hydrostatic_tank/RHEO"]
+	path = benchmark_7__hydrostatic_tank/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_8__dam_break/RHEO"]
+	path = benchmark_8__dam_break/RHEO
+	url = https://github.com/lammps/lammps.git
+[submodule "benchmark_9__surface_normal/RHEO"]
+	path = benchmark_9__surface_normal/RHEO
+	url = https://github.com/lammps/lammps.git
