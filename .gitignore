@@ -12,3 +12,4 @@ slurm*
 log.lammps
 *_data
 .nfs*
+build
